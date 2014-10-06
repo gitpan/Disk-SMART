@@ -1,6 +1,6 @@
 Revision history for Disk-SMART
 
-0.03.1  2014-10-06
+0.04    2014-10-06
         Updated Makefile.PL to better interact with Meta::CPAN
         Updated pod for clarity
 

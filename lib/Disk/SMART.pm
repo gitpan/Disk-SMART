@@ -1,6 +1,6 @@
 package Disk::SMART;
 {
-    $Disk::SMART::VERSION = '0.03.1'
+    $Disk::SMART::VERSION = '0.04'
 }
 
 =head1 NAME
