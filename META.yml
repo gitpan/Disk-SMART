@@ -1,23 +1,32 @@
---- #YAML:1.0
-name:               Disk-SMART
-version:            0.03
-abstract:           Provides an interface to smartctl
+---
+abstract: 'Provides an interface to smartctl'
 author:
-    - Paul Trost <paul.trost@trostfamily.org>
-license:            perl
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
+  - 'Paul Trost <ptrost@cpan.org>'
 build_requires:
-    ExtUtils::MakeMaker:  0
-requires:
-    Math::Round:  0
-    Test::More:   0
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.57_05
+  ExtUtils::MakeMaker: '0'
+  Test::More: '0'
+configure_requires:
+  ExtUtils::MakeMaker: '0'
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.142690'
+license: gpl
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: '1.4'
+name: Disk-SMART
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  Carp: '0'
+  Math::Round: '0'
+  perl: '5.010'
+resources:
+  repository: https://github.com/paultrost/Disk-SMART-Perl.git
+version: v0.03.1
+x_clean:
+  FILES: Disk-SMART-*
+x_dist:
+  COMPRESS: 'gzip -9f'
+  SUFFIX: gz
