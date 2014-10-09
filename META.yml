@@ -24,7 +24,7 @@ requires:
   perl: '5.010'
 resources:
   repository: https://github.com/paultrost/Disk-SMART-Perl.git
-version: '0.05'
+version: '0.06'
 x_clean:
   FILES: Disk-SMART-*
 x_dist:
