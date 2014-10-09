@@ -51,7 +51,7 @@
          "web" : "https://github.com/paultrost/Disk-SMART-Perl"
       }
    },
-   "version" : "0.04",
+   "version" : "0.05",
    "x_clean" : {
       "FILES" : "Disk-SMART-*"
    },

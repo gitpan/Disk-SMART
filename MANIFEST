@@ -5,6 +5,7 @@ MANIFEST			This list of files
 INSTALL
 README
 README.md
+LICENSE
 t/00-load.t
 t/01-instantiation.t
 t/02-get_functions.t
