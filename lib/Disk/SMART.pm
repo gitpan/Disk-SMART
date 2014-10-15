@@ -6,7 +6,7 @@ use Carp;
 use Math::Round;
 
 {
-    $Disk::SMART::VERSION = '0.06'
+    $Disk::SMART::VERSION = '0.07'
 }
 
 our $smartctl = '/usr/sbin/smartctl';
@@ -18,7 +18,6 @@ Disk::SMART - Provides an interface to smartctl
 =head1 SYNOPSIS
 
 Disk::SMART is an object ooriented module that provides an interface to get SMART disk info from a device as well as initiate testing.
-
     use Disk::SMART;
 
     my $smart = Disk::SMART->new('/dev/sda');
@@ -32,30 +31,31 @@ Disk::SMART is an object ooriented module that provides an interface to get SMAR
 
 Instantiates the Disk::SMART object
 
-C<DEVICE> - Device identifier of SSD / Hard Drive
+C<DEVICE> - Device identifier of SSD / Hard Drive. The constructor takes either a single device name, or an array of device names.
 
     my $smart = Disk::SMART->new( 'dev/sda', '/dev/sdb' );
 
-Returns C<Disk::SMART> object if smartctl is available and can poll the given device.
+Returns C<Disk::SMART> object if smartctl is available and can poll the given device(s).
 
 =cut
 
 sub new {
     my ( $class, @devices ) = @_;
     my $self = bless {}, $class;
+    my $test_data;
 
-    croak "Valid device identifier not supplied to constructor for $class.\n" if ( !@devices );
-    croak "smartctl binary was not found on your system, are you running as root?\n" if !-f $smartctl;
+    croak "Valid device identifier not supplied to constructor for $class.\n"
+        if !@devices && !defined $ENV{'TEST_MOCK_DATA'};
+    croak "smartctl binary was not found on your system, are you running as root?\n"
+        if !-f $smartctl && !defined $ENV{'TEST_MOCK_DATA'};
 
-    foreach my $device (@devices) {
-        $self->update_data($device);
-    }
+    $self->update_data($_) foreach @devices;
+
     return $self;
 }
 
 
 =head1 USER METHODS
-
 
 =head2 B<get_disk_attributes(DEVICE)>
 
@@ -69,6 +69,8 @@ C<DEVICE> - Device identifier of SSD/ Hard Drive
 
 sub get_disk_attributes {
     my ( $self, $device ) = @_;
+    $self->_validate_param($device);
+
     return $self->{'devices'}->{$device}->{'attributes'};
 }
 
@@ -85,6 +87,8 @@ C<DEVICE> - Device identifier of SSD/ Hard Drive
 
 sub get_disk_errors {
     my ( $self, $device ) = @_;
+    $self->_validate_param($device);
+
     return $self->{'devices'}->{$device}->{'errors'};
 }
 
@@ -101,6 +105,8 @@ C<DEVICE> - Device identifier of SSD / Hard Drive
 
 sub get_disk_health {
     my ( $self, $device ) = @_;
+    $self->_validate_param($device);
+
     return $self->{'devices'}->{$device}->{'health'};
 }
 
@@ -117,6 +123,8 @@ C<DEVICE> - Device identifier of SSD / Hard Drive
 
 sub get_disk_model {
     my ( $self, $device ) = @_;
+    $self->_validate_param($device);
+
     return $self->{'devices'}->{$device}->{'model'};
 }
 
@@ -133,6 +141,8 @@ C<DEVICE> - Device identifier of SSD / Hard Drive
 
 sub get_disk_temp {
     my ( $self, $device ) = @_;
+    $self->_validate_param($device);
+
     return @{ $self->{'devices'}->{$device}->{'temp'} };
 }
 
@@ -149,16 +159,17 @@ C<DEVICE> - Device identifier of SSD/ Hard Drive
 
 sub update_data {
     my ( $self, $device ) = @_;
+    my $out = ( defined $ENV{'MOCK_TEST_DATA'} ) ? $ENV{'MOCK_TEST_DATA'} : qx($smartctl -a $device);
+    my $retval = $?;
 
-    chomp( my $out = qx($smartctl -a $device) );
-    croak "Smartctl couldn't poll device $device\n" if $out =~ /No such device/;
+    if ( !$ENV{'MOCK_TEST_DATA'} ) {
+        croak "Smartctl couldn't poll device $device\n"
+            if ( $out !~ /START OF INFORMATION SECTION/ );
+    }
+
+    chomp($out);
     $self->{'devices'}->{$device}->{'SMART_OUTPUT'} = $out;
     
-    # update_data() can be called at any time with a device name. Let's check
-    # the device name given to make sure it matches what was given during
-    # object construction.
-    croak "$device not found in object, You probably didn't enter it right" if ( !exists $self->{'devices'}->{$device} );
-
     $self->_process_disk_attributes($device);
     $self->_process_disk_errors($device);
     $self->_process_disk_health($device);
@@ -168,8 +179,41 @@ sub update_data {
     return 1;
 }
 
+=head2 B<run_short_test>
+
+Runs the SMART short self test and returns the result.
+
+C<DEVICE> - Device identifier of SSD/ Hard Drive
+
+    $smart->run_short_test('/dev/sda');
+
+=cut
+
+sub run_short_test {
+    my ( $self, $device ) = @_;
+    $self->_validate_param($device);
+
+    if ( !defined $ENV{'MOCK_TEST_DATA'} ) {
+        my $out = qx( $smartctl -t short $device );
+        my ($short_test_time) = $out =~ /Please wait (.*) minutes/s;
+        sleep( $short_test_time * 60 );
+    }
+
+    my $smart_output = ( defined $ENV{'MOCK_TEST_DATA'} ) ? $ENV{'MOCK_TEST_DATA'} : qx($smartctl -a $device);
+    ($smart_output) = $smart_output =~ /(SMART Self-test log.*)\nSMART Selective self-test/s;
+    my @device_tests = split /\n/, $smart_output;
+    my $short_test_number = $device_tests[2];
+    my $short_test_status = substr $short_test_number, 25, +30;
+    $short_test_status =~ s/\s+$//g;    #trim beginning and ending whitepace
+
+    return $short_test_status;
+}
+
+##INTERNAL FUNCTIONS BELOW. THESE SHOULD NEVER BE CALLED BY A SCRIPT##
+
 sub _process_disk_attributes {
     my ( $self, $device ) = @_;
+    $self->_validate_param($device);
 
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
     my ($smart_attributes) = $smart_output =~ /(ID# ATTRIBUTE_NAME.*)\nSMART Error/s;
@@ -183,6 +227,7 @@ sub _process_disk_attributes {
         $value =~ s/^\s+//g;    # trim beginning and ending whitepace
         $self->{'devices'}->{$device}->{'attributes'}->{$name} = $value;
     }
+
     return;
 }
 
@@ -192,77 +237,66 @@ sub _process_disk_errors {
 
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
     my ($errors) = $smart_output =~ /SMART Error Log Version: [1-9](.*)SMART Self-test log/s;
-
-    if ( !defined $errors ) {
-        $self->{'devices'}->{$device}->{'errors'} = 'N/A';
-        return;
-    }
-
     $errors =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
-    $self->{'devices'}->{$device}->{'errors'} = $errors;
-    return;
+    $errors = 'N/A' if !$errors;
+
+    return $self->{'devices'}->{$device}->{'errors'} = $errors;
 }
 
 sub _process_disk_health {
     my ( $self, $device ) = @_;
     $self->_validate_param($device);
+
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    my ($health) = $smart_output =~ /(SMART overall-health self-assessment.*\n)/;
+    my ($health) = $smart_output =~ /SMART overall-health self-assessment test result:(.*)\n/;
+    $health =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+    $health = 'N/A' if !$health or $health !~ /PASSED|FAILED/x;
 
-    if ( (!defined $health) or $health !~ /PASSED|FAILED/x ) {
-        $self->{'devices'}->{$device}->{'health'} = 'N/A';
-        return;
-    }
-
-    $health =~ s/.*: //;
-    chomp $health;
-    $self->{'devices'}->{$device}->{'health'} = $health;
-    return;
+    return $self->{'devices'}->{$device}->{'health'} = $health;
 }
 
 sub _process_disk_model {
     my ( $self, $device ) = @_;
     $self->_validate_param($device);
+    
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    my ($model) = $smart_output =~ /(Device\ Model.*\n)/;
-
-    if ( !defined $model ) {
-        $self->{'devices'}->{$device}->{'model'} = 'N/A';
-        return;
-    }
-
-    $model =~ s/.*:\ //;
+    my ($model) = $smart_output =~ /Device\ Model:(.*)\n/;
     $model =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
-    $self->{'devices'}->{$device}->{'model'} = $model;
-    return;
+    $model = 'N/A' if !$model;
+
+    return $self->{'devices'}->{$device}->{'model'} = $model;
 }
 
 sub _process_disk_temp {
     my ( $self, $device ) = @_;
     $self->_validate_param($device);
-    my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    my ($temp_c) = $smart_output =~ /(Temperature_Celsius.*\n)/;
+    my ( $temp_c, $temp_f );
 
-    if ( !defined $temp_c || $smart_output =~ qr/S.M.A.R.T. not available/x ) {
-        $self->{'devices'}->{$device}->{'temp'} = [( 'N/A' )];
-        return;
+    my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
+    ($temp_c) = $smart_output =~ /(Temperature_Celsius.*\n)/;
+
+    if ($temp_c) {
+        $temp_c = substr $temp_c, 83, +3;
+        $temp_c =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+        $temp_f = round( ( $temp_c * 9 ) / 5 + 32 );
+        $temp_c = int $temp_c;
+        $temp_f = int $temp_f;
+    }
+    else {
+        $temp_c = 'N/A';
+        $temp_f = 'N/A';
     }
 
-    chomp($temp_c);
-    $temp_c = substr $temp_c, 83, +3;
-    $temp_c =~ s/ //g;
-
-    my $temp_f = round( ( $temp_c * 9 ) / 5 + 32 );
-    $self->{'devices'}->{$device}->{'temp'} = [ ( int $temp_c, int $temp_f ) ];
-    return;
+    return $self->{'devices'}->{$device}->{'temp'} = [ ( $temp_c, $temp_f ) ];
 }
 
 sub _validate_param {
     my ( $self, $device ) = @_;
-    croak "$device not found in object, You probably didn't enter it right" if ( !exists $self->{'devices'}->{$device} );
+    croak "$device not found in object. Verify you specified the right device identifier.\n" if ( !exists $self->{'devices'}->{$device} );
+
     return;
 }
-    
+
 1;
 
 __END__

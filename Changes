@@ -1,5 +1,12 @@
 Revision history for Disk-SMART
 
+        
+
+0.07    2014-10-15
+        Implemented dummy testing in unit tests to bypass the need for smokers having smartctl installed
+        Regex and function cleanups
+        Added run_short_test() to run the SMART short self test and unit tests for it
+
 0.06    2014-10-09
         Fixed issue with N/A disk temp not returning correctly and causing failure
 
@@ -22,7 +29,7 @@ Revision history for Disk-SMART
         Added get_disk_errors()
         Methods now validate the device passed to it, to ensure smartctl has already read it
         Added unit tests to test passing invalid device to methods
-        Changed to croak() as I didn't feel a trace was necessary with proper error returning.
+        Changed to croak() as I didn't feel a trace was necessary with proper error returning
 
 0.02    2014-10-03
         Added confess to new() in case smartctl cannot find the specified device

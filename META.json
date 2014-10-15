@@ -39,6 +39,7 @@
       },
       "test" : {
          "requires" : {
+            "Test::Fatal" : "0",
             "Test::More" : "0"
          }
       }
@@ -51,7 +52,7 @@
          "web" : "https://github.com/paultrost/Disk-SMART-Perl"
       }
    },
-   "version" : "0.06",
+   "version" : "0.07",
    "x_clean" : {
       "FILES" : "Disk-SMART-*"
    },
