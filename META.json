@@ -1,5 +1,5 @@
 {
-   "abstract" : "Provides an interface to smartctl",
+   "abstract" : "Provides an interface to smartctl to return disk stats and to run tests.",
    "author" : [
       "Paul Trost <ptrost@cpan.org>"
    ],
@@ -52,7 +52,7 @@
          "web" : "https://github.com/paultrost/Disk-SMART-Perl"
       }
    },
-   "version" : "0.07",
+   "version" : "0.08",
    "x_clean" : {
       "FILES" : "Disk-SMART-*"
    },
