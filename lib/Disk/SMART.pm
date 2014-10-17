@@ -6,10 +6,11 @@ use Carp;
 use Math::Round;
 
 {
-    $Disk::SMART::VERSION = '0.08'
+    $Disk::SMART::VERSION = '0.09'
 }
 
-our $smartctl = '/usr/sbin/smartctl';
+our $smartctl = qx(which smartctl);
+chomp($smartctl);
 
 =head1 NAME
 
@@ -158,13 +159,12 @@ C<DEVICE> - Device identifier of SSD/ Hard Drive
 
 sub update_data {
     my ( $self, $device ) = @_;
-    my $out = ( defined $ENV{'MOCK_TEST_DATA'} ) ? $ENV{'MOCK_TEST_DATA'} : qx($smartctl -a $device);
-    my $retval = $?;
 
-    if ( !$ENV{'MOCK_TEST_DATA'} ) {
-        croak "Smartctl couldn't poll device $device\n"
-            if ( $out !~ /START OF INFORMATION SECTION/ );
-    }
+    my $out;
+    $out = $ENV{'MOCK_TEST_DATA'}   if defined $ENV{'MOCK_TEST_DATA'};
+    $out = qx($smartctl -a $device) if ( !defined $ENV{'MOCK_TEST_DATA'} && -f $smartctl );
+    croak "Smartctl couldn't poll device $device\n"
+        if ( !$out || $out !~ /START OF INFORMATION SECTION/ );
 
     chomp($out);
     $self->{'devices'}->{$device}->{'SMART_OUTPUT'} = $out;
@@ -291,7 +291,8 @@ sub _process_disk_temp {
 
 sub _validate_param {
     my ( $self, $device ) = @_;
-    croak "$device not found in object. Verify you specified the right device identifier.\n" if ( !exists $self->{'devices'}->{$device} );
+    croak "$device not found in object. Verify you specified the right device identifier.\n"
+        if ( !exists $self->{'devices'}->{$device} );
 
     return;
 }
@@ -299,6 +300,10 @@ sub _validate_param {
 1;
 
 __END__
+
+=head1 COMPATIBILITY
+
+  This module should run on any UNIX like OS with Perl 5.10+ and the smartctl progam installed from the smartmontools package.
 
 =head1 AUTHOR
 
