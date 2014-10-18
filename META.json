@@ -4,7 +4,7 @@
       "Paul Trost <ptrost@cpan.org>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.142690",
+   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.120921",
    "license" : [
       "gpl_2"
    ],
@@ -20,16 +20,6 @@
       ]
    },
    "prereqs" : {
-      "build" : {
-         "requires" : {
-            "ExtUtils::MakeMaker" : "0"
-         }
-      },
-      "configure" : {
-         "requires" : {
-            "ExtUtils::MakeMaker" : "0"
-         }
-      },
       "runtime" : {
          "requires" : {
             "Carp" : "0",
@@ -40,7 +30,9 @@
       "test" : {
          "requires" : {
             "Test::Fatal" : "0",
-            "Test::More" : "0"
+            "Test::More" : "0",
+            "Test::Pod" : "0",
+            "Test::Pod::Coverage" : "0"
          }
       }
    },
@@ -52,7 +44,7 @@
          "web" : "https://github.com/paultrost/Disk-SMART-Perl"
       }
    },
-   "version" : "0.09",
+   "version" : "0.10",
    "x_clean" : {
       "FILES" : "Disk-SMART-*"
    },

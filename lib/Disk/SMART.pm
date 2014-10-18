@@ -6,7 +6,7 @@ use Carp;
 use Math::Round;
 
 {
-    $Disk::SMART::VERSION = '0.09'
+    $Disk::SMART::VERSION = '0.10'
 }
 
 our $smartctl = qx(which smartctl);
@@ -71,7 +71,7 @@ sub get_disk_attributes {
     my ( $self, $device ) = @_;
     $self->_validate_param($device);
 
-    return $self->{'devices'}->{$device}->{'attributes'};
+    return %{ $self->{'devices'}->{$device}->{'attributes'} };
 }
 
 
@@ -272,7 +272,7 @@ sub _process_disk_temp {
     my ( $temp_c, $temp_f );
 
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    ($temp_c) = $smart_output =~ /(Temperature_Celsius.*\n)/;
+    ($temp_c) = $smart_output =~ /(Temperature_Celsius.*\n|Airflow_Temperature_Cel.*\n)/;
 
     if ($temp_c) {
         $temp_c = substr $temp_c, 83, +3;
