@@ -6,11 +6,10 @@ use Carp;
 use Math::Round;
 
 {
-    $Disk::SMART::VERSION = '0.10'
+    $Disk::SMART::VERSION = '0.11'
 }
 
-our $smartctl = qx(which smartctl);
-chomp($smartctl);
+chomp( our $smartctl = qx(which smartctl) );
 
 =head1 NAME
 
@@ -19,9 +18,12 @@ Disk::SMART - Provides an interface to smartctl to return disk stats and to run 
 =head1 SYNOPSIS
 
 Disk::SMART is an object oriented module that provides an interface to get SMART disk info from a device as well as initiate testing.
+
     use Disk::SMART;
 
-    my $smart = Disk::SMART->new('/dev/sda');
+    my $smart = Disk::SMART->new('/dev/sda', '/dev/sdb');
+
+    my $disk_health = $smart->get_disk_health('/dev/sda');
 
 =cut
 
@@ -95,7 +97,24 @@ sub get_disk_errors {
 
 =head2 B<get_disk_health(DEVICE)>
 
-Returns the health of the disk. Output is "PASSED", "FAILED", or "N/A".
+Returns the health of the disk. Output is "PASSED", "FAILED", or "N/A". If the device has positive values for the attributes listed below then the status will output that information.
+
+Eg. "FAILED - Reported_Uncorrectable_Errors = 1"
+
+The attributes are:
+
+5 - Reallocated_Sector_Count
+
+187 - Reported_Uncorrectable_Errors
+
+188 - Command_Timeout
+
+197 - Current_Pending_Sector_Count
+
+198 - Offline_Uncorrectable
+
+If Reported_Uncorrectable_Errors is greater than 0 then the drive should be replaced immediately. This list is taken from a study shown at https://www.backblaze.com/blog/hard-drive-smart-stats/
+
 
 C<DEVICE> - Device identifier of SSD / Hard Drive
 
@@ -107,7 +126,17 @@ sub get_disk_health {
     my ( $self, $device ) = @_;
     $self->_validate_param($device);
 
-    return $self->{'devices'}->{$device}->{'health'};
+    my $status = $self->{'devices'}->{$device}->{'health'};
+
+    my %failure_attribute_hash;
+    while ( my ($key, $value) = each %{ $self->{'devices'}->{$device}->{'attributes'} } ) {
+        if ( $key =~ /\A5\Z|\A187\Z|\A188\Z|\A197\Z|\A198\Z/ ) {
+            $failure_attribute_hash{$key} = $value;
+            $status .= ": $key - $value->[0] = $value->[1]" if ( $value->[1] > 0 );
+        }
+    }
+
+    return $status;
 }
 
 
@@ -147,11 +176,11 @@ sub get_disk_temp {
 }
 
 
-=head2 B<update_data>
+=head2 B<update_data(DEVICE)>
 
 Updates the SMART output and attributes of a device. Returns undef.
 
-C<DEVICE> - Device identifier of SSD/ Hard Drive
+C<DEVICE> - Device identifier of SSD Hard Drive
 
     $smart->update_data('/dev/sda');
 
@@ -175,10 +204,10 @@ sub update_data {
     $self->_process_disk_model($device);
     $self->_process_disk_temp($device);
 
-    return 1;
+    return;
 }
 
-=head2 B<run_short_test>
+=head2 B<run_short_test(DEVICE)>
 
 Runs the SMART short self test and returns the result.
 
@@ -198,12 +227,12 @@ sub run_short_test {
         sleep( $short_test_time * 60 );
     }
 
-    my $smart_output = ( defined $ENV{'MOCK_TEST_DATA'} ) ? $ENV{'MOCK_TEST_DATA'} : qx($smartctl -a $device);
+    my $smart_output = $ENV{'MOCK_TEST_DATA'} // qx($smartctl -a $device);
     ($smart_output) = $smart_output =~ /(SMART Self-test log.*)\nSMART Selective self-test/s;
     my @device_tests      = split /\n/, $smart_output;
     my $short_test_number = $device_tests[2];
     my $short_test_status = substr $short_test_number, 25, +30;
-    $short_test_status =~ s/\s+$//g;    #trim beginning and ending whitepace
+    $short_test_status = _trim($short_test_status);
 
     return $short_test_status;
 }
@@ -217,14 +246,16 @@ sub _process_disk_attributes {
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
     my ($smart_attributes) = $smart_output =~ /(ID# ATTRIBUTE_NAME.*)\nSMART Error/s;
     my @attributes = split /\n/, $smart_attributes;
-    shift @attributes;
+    shift @attributes; #remove table header
 
     foreach my $attribute (@attributes) {
+        my $id    = substr $attribute, 0,  +3;
         my $name  = substr $attribute, 4,  +24;
         my $value = substr $attribute, 83, +50;
-        $name  =~ s/\s+$//g;    # trim ending whitespace
-        $value =~ s/^\s+//g;    # trim beginning and ending whitepace
-        $self->{'devices'}->{$device}->{'attributes'}->{$name} = $value;
+        $id    = _trim($id);
+        $name  = _trim($name);
+        $value = _trim($value);
+        $self->{'devices'}->{$device}->{'attributes'}->{$id} = [ $name, $value ];
     }
 
     return;
@@ -235,8 +266,8 @@ sub _process_disk_errors {
     $self->_validate_param($device);
 
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    my ($errors) = $smart_output =~ /SMART Error Log Version: [1-9](.*)SMART Self-test log/s;
-    $errors =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+    my ($errors)     = $smart_output =~ /SMART Error Log Version: [1-9](.*)SMART Self-test log/s;
+    $errors = _trim($errors);
     $errors = 'N/A' if !$errors;
 
     return $self->{'devices'}->{$device}->{'errors'} = $errors;
@@ -247,8 +278,8 @@ sub _process_disk_health {
     $self->_validate_param($device);
 
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    my ($health) = $smart_output =~ /SMART overall-health self-assessment test result:(.*)\n/;
-    $health =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+    my ($health)     = $smart_output =~ /SMART overall-health self-assessment test result:(.*)\n/;
+    $health = _trim($health);
     $health = 'N/A' if !$health || $health !~ /PASSED|FAILED/x;
 
     return $self->{'devices'}->{$device}->{'health'} = $health;
@@ -259,8 +290,8 @@ sub _process_disk_model {
     $self->_validate_param($device);
     
     my $smart_output = $self->{'devices'}->{$device}->{'SMART_OUTPUT'};
-    my ($model) = $smart_output =~ /Device\ Model:(.*)\n/;
-    $model =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+    my ($model)      = $smart_output =~ /Device\ Model:(.*)\n/;
+    $model = _trim($model);
     $model = 'N/A' if !$model;
 
     return $self->{'devices'}->{$device}->{'model'} = $model;
@@ -276,7 +307,7 @@ sub _process_disk_temp {
 
     if ($temp_c) {
         $temp_c = substr $temp_c, 83, +3;
-        $temp_c =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+        $temp_c = _trim($temp_c);
         $temp_f = round( ( $temp_c * 9 ) / 5 + 32 );
         $temp_c = int $temp_c;
         $temp_f = int $temp_f;
@@ -289,6 +320,12 @@ sub _process_disk_temp {
     return $self->{'devices'}->{$device}->{'temp'} = [ ( $temp_c, $temp_f ) ];
 }
 
+sub _trim {
+    my $string = shift;
+    $string =~ s/^\s+|\s+$//g;    #trim beginning and ending whitepace
+    return $string;
+}
+
 sub _validate_param {
     my ( $self, $device ) = @_;
     croak "$device not found in object. Verify you specified the right device identifier.\n"
@@ -298,6 +335,7 @@ sub _validate_param {
 }
 
 1;
+
 
 __END__
 
